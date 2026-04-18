@@ -4,8 +4,11 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import type { Case } from "@/lib/api";
 
-function caseTypeTone(t: string): "blue" | "green" | "orange" | "purple" | "neutral" {
+function caseTypeTone(
+  t: string,
+): "blue" | "green" | "orange" | "purple" | "red" | "neutral" {
   const v = t.toLowerCase();
+  if (v.includes("murder")) return "red";
   if (v.includes("dui")) return "blue";
   if (v.includes("drug")) return "green";
   if (v.includes("assault")) return "orange";

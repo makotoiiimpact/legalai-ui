@@ -20,6 +20,7 @@ const CASE_TYPES = [
   { label: "DUI", value: "DUI" },
   { label: "Drug", value: "Drug" },
   { label: "Assault", value: "Assault" },
+  { label: "Murder", value: "Murder" },
   { label: "Domestic Violence", value: "Domestic Violence" },
   { label: "Theft", value: "Theft" },
   { label: "Other", value: "Other" },

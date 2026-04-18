@@ -2,7 +2,15 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "https://web-production-e379a8.up
 
 export type CaseStatus = "intake" | "review" | "complete" | string;
 export type ChargeSeverity = "misdemeanor" | "gross_misdemeanor" | "felony" | string;
-export type CaseType = "DUI" | "Drug" | "Assault" | "Domestic Violence" | "Theft" | "Other" | string;
+export type CaseType =
+  | "DUI"
+  | "Drug"
+  | "Assault"
+  | "Murder"
+  | "Domestic Violence"
+  | "Theft"
+  | "Other"
+  | string;
 export type ReviewAction = "confirmed" | "edited" | "rejected";
 export type RecommendedPath = "suppression_motion" | "plea_negotiate" | "trial" | "dismiss" | string;
 
