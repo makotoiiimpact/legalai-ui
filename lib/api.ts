@@ -1,16 +1,3 @@
-import {
-  addEntity,
-  applyCorrection,
-  confirmAllRemaining,
-  confirmEntity,
-  createCaseFromNumber,
-  createCaseFromUpload,
-  getCase,
-  getExtractionStatus,
-  getMatchup,
-  listCases,
-  resolveAmbiguous,
-} from "./store";
 import type {
   CaseDetail,
   CaseSummary,
@@ -20,18 +7,19 @@ import type {
   Matchup,
 } from "./types";
 
-// Client-side API shim. All operations hit the in-memory mock store
-// (lib/store.ts) with a small delay to simulate network latency.
+// Real HTTP client against the legalai-api v2 surface (FastAPI on Railway).
+// Endpoint contract: see /Users/makotokern/Projects/legalai-api/routes/intake.py
+// TypeScript type contract: ./types.ts
 //
-// When real HTTP endpoints ship in legalai-api, swap the body of each
-// method for a fetch() call — the signatures match the spec's API surface
-// sketch in Notion (Firm Case Intake — Frontend UX Design v1).
+// Local dev: set NEXT_PUBLIC_API_URL=http://localhost:8000/api/v2 in .env.local
+// Production: Vercel project env var points at Railway /api/v2
+//
+// lib/store.ts and lib/mock-data.ts are retained as reference / fallback but
+// no longer imported by this module.
 
-const DEFAULT_DELAY_MS = 180;
-
-function delay<T>(value: T, ms: number = DEFAULT_DELAY_MS): Promise<T> {
-  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
-}
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  "https://web-production-e379a8.up.railway.app/api/v2";
 
 export class ApiError extends Error {
   status: number;
@@ -43,60 +31,92 @@ export class ApiError extends Error {
   }
 }
 
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_URL}${path}`, {
+    ...init,
+    headers: {
+      Accept: "application/json",
+      ...(init?.headers ?? {}),
+    },
+  });
+  if (!res.ok) {
+    let detail = res.statusText || `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body && typeof body.detail === "string") detail = body.detail;
+      else if (body) detail = JSON.stringify(body);
+    } catch {
+      try {
+        const text = await res.text();
+        if (text) detail = text;
+      } catch {
+        // ignore
+      }
+    }
+    throw new ApiError(res.status, detail);
+  }
+  if (res.status === 204) return undefined as T;
+  // null responses (e.g. no matchup yet) parse as `null` — that's fine.
+  return (await res.json()) as T;
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
 export const api = {
   listCases(): Promise<CaseSummary[]> {
-    return delay(listCases());
+    return request<CaseSummary[]>(`/cases`);
   },
 
   getCase(caseId: string): Promise<CaseDetail> {
-    const c = getCase(caseId);
-    if (!c) return Promise.reject(new ApiError(404, "Case not found"));
-    return delay(c);
+    return request<CaseDetail>(`/cases/${caseId}`);
   },
 
   getExtractionStatus(caseId: string): Promise<ExtractionStatus> {
-    const s = getExtractionStatus(caseId);
-    if (!s) return Promise.reject(new ApiError(404, "Case not found"));
-    // Shorter delay on polling so UI feels snappy.
-    return delay(s, 60);
+    return request<ExtractionStatus>(`/cases/${caseId}/extraction`);
   },
 
   getMatchup(caseId: string): Promise<Matchup | null> {
-    return delay(getMatchup(caseId));
+    return request<Matchup | null>(`/cases/${caseId}/matchup`);
   },
 
   async uploadCaseDocument(file: File): Promise<CaseDetail> {
-    const fileType = inferFileType(file);
-    const created = createCaseFromUpload({
-      fileName: file.name,
-      fileSizeBytes: file.size,
-      fileType,
-      pageCount: fileType === "pdf" ? 3 : undefined,
+    const form = new FormData();
+    form.append("file", file);
+    return request<CaseDetail>(`/cases/upload`, {
+      method: "POST",
+      body: form,
     });
-    return delay(created, 450);
   },
 
   createCase(caseNumber: string): Promise<{ caseId: string; duplicateOf?: string }> {
-    const result = createCaseFromNumber(caseNumber);
-    return delay(result);
+    return request(`/cases`, jsonInit("POST", { caseNumber }));
   },
 
   confirmEntity(caseId: string, entityId: string): Promise<CaseDetail> {
-    const updated = confirmEntity(caseId, entityId);
-    if (!updated) return Promise.reject(new ApiError(404, "Case or entity not found"));
-    return delay(updated);
+    return request<CaseDetail>(
+      `/cases/${caseId}/entities/${entityId}/confirm`,
+      { method: "PATCH" },
+    );
   },
 
   confirmAllRemaining(caseId: string): Promise<CaseDetail> {
-    const updated = confirmAllRemaining(caseId);
-    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
-    return delay(updated);
+    return request<CaseDetail>(
+      `/cases/${caseId}/entities/confirm-all`,
+      { method: "PATCH" },
+    );
   },
 
   applyCorrection(caseId: string, entityId: string, payload: CorrectionPayload): Promise<CaseDetail> {
-    const updated = applyCorrection(caseId, entityId, payload);
-    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
-    return delay(updated);
+    return request<CaseDetail>(
+      `/cases/${caseId}/entities/${entityId}/correct`,
+      jsonInit("PATCH", payload),
+    );
   },
 
   resolveAmbiguous(
@@ -104,25 +124,22 @@ export const api = {
     entityId: string,
     pickedEntityId: string | null,
   ): Promise<CaseDetail> {
-    const updated = resolveAmbiguous(caseId, entityId, pickedEntityId);
-    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
-    return delay(updated);
+    return request<CaseDetail>(
+      `/cases/${caseId}/entities/${entityId}/resolve`,
+      jsonInit("PATCH", { pickedEntityId }),
+    );
   },
 
   addEntity(caseId: string, name: string, role: EntityRole): Promise<CaseDetail> {
-    const updated = addEntity(caseId, name, role);
-    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
-    return delay(updated);
+    return request<CaseDetail>(
+      `/cases/${caseId}/entities`,
+      jsonInit("POST", { name, role }),
+    );
   },
 };
 
-function inferFileType(file: File): "pdf" | "docx" | "image" {
-  const name = file.name.toLowerCase();
-  if (name.endsWith(".pdf")) return "pdf";
-  if (name.endsWith(".docx") || name.endsWith(".doc")) return "docx";
-  return "image";
-}
-
+// Re-exported so components can reuse the allowlists / limits. These mirror
+// the backend validation in routes/intake.py.
 export const ACCEPTED_EXTS = [".pdf", ".docx", ".jpg", ".jpeg", ".png", ".heic"];
 export const ACCEPTED_MIME = [
   "application/pdf",
