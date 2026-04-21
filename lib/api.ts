@@ -1,159 +1,36 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? "https://web-production-e379a8.up.railway.app";
+import {
+  addEntity,
+  applyCorrection,
+  confirmAllRemaining,
+  confirmEntity,
+  createCaseFromNumber,
+  createCaseFromUpload,
+  getCase,
+  getExtractionStatus,
+  getMatchup,
+  listCases,
+  resolveAmbiguous,
+} from "./store";
+import type {
+  CaseDetail,
+  CaseSummary,
+  CorrectionPayload,
+  EntityRole,
+  ExtractionStatus,
+  Matchup,
+} from "./types";
 
-export type CaseStatus = "intake" | "review" | "complete" | string;
-export type ChargeSeverity = "misdemeanor" | "gross_misdemeanor" | "felony" | string;
-export type CaseType =
-  | "DUI"
-  | "Drug"
-  | "Assault"
-  | "Murder"
-  | "Domestic Violence"
-  | "Theft"
-  | "Other"
-  | string;
-export type ReviewAction = "confirmed" | "edited" | "rejected";
-export type RecommendedPath = "suppression_motion" | "plea_negotiate" | "trial" | "dismiss" | string;
+// Client-side API shim. All operations hit the in-memory mock store
+// (lib/store.ts) with a small delay to simulate network latency.
+//
+// When real HTTP endpoints ship in legalai-api, swap the body of each
+// method for a fetch() call — the signatures match the spec's API surface
+// sketch in Notion (Firm Case Intake — Frontend UX Design v1).
 
-export interface Case {
-  id: string;
-  case_number: string;
-  client_name: string;
-  case_type: CaseType;
-  charge: string | null;
-  charge_severity: ChargeSeverity | null;
-  incident_date: string | null;
-  jurisdiction: string;
-  status: CaseStatus;
-  paralegal_id: string | null;
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
+const DEFAULT_DELAY_MS = 180;
 
-export interface CreateCaseBody {
-  case_number: string;
-  client_name: string;
-  case_type: CaseType;
-  charge?: string | null;
-  charge_severity?: ChargeSeverity | null;
-  incident_date?: string | null;
-  jurisdiction?: string;
-  notes?: string | null;
-}
-
-export interface Document {
-  id: string;
-  name: string;
-  doc_type: string;
-  file_size_kb: number;
-  page_count: number;
-  indexed: boolean;
-  indexed_at: string | null;
-  chunk_count: number;
-  created_at: string;
-}
-
-export interface UploadDocumentResponse {
-  document_id: string;
-  name: string;
-  doc_type: string;
-  indexed: boolean;
-  message: string;
-}
-
-export interface AnalyzeResponse {
-  run_id: string;
-  case_id: string;
-  case_type: string;
-  message: string;
-}
-
-export interface SourceExcerpt {
-  doc_name: string;
-  excerpt: string;
-  relevance?: string;
-}
-
-export interface Finding {
-  id: string;
-  case_id: string;
-  check_type: string;
-  label: string;
-  ai_answer: string;
-  source_chunk_ids: string[] | null;
-  source_excerpts: string;
-  confidence: number;
-  hil_status: ReviewAction | null;
-  edited_answer: string | null;
-  reviewed_by: string | null;
-  reviewed_at: string | null;
-  priority_flag: boolean;
-  run_id: string;
-  created_at: string;
-}
-
-export interface ReviewBody {
-  action: ReviewAction;
-  edited_answer?: string | null;
-  reviewer_name?: string;
-  note?: string | null;
-}
-
-export interface ReviewFindingResponse {
-  finding_id: string;
-  action: ReviewAction;
-  all_reviewed: boolean;
-  message: string;
-}
-
-export interface PriorityFinding {
-  label: string;
-  summary: string;
-}
-
-export interface Memo {
-  id: string;
-  case_id: string;
-  draft_content: string;
-  recommended_path: RecommendedPath;
-  priority_findings: string;
-  attorney_approved: boolean;
-  attorney_notes: string | null;
-  approved_at: string | null;
-  approved_by: string | null;
-  version: number;
-  created_at: string;
-}
-
-export interface GenerateMemoResponse {
-  case_id: string;
-  message: string;
-}
-
-export interface ApproveBody {
-  attorney_name?: string;
-  notes?: string | null;
-}
-
-export interface ApproveMemoResponse {
-  case_id: string;
-  memo_id: string;
-  approved_by: string;
-  approved_at: string;
-  message: string;
-}
-
-export interface AuditEntry {
-  id: string;
-  case_id: string;
-  finding_id: string | null;
-  document_id: string | null;
-  action: string;
-  actor: string;
-  actor_name: string;
-  note: string | null;
-  metadata: Record<string, unknown> | null;
-  created_at: string;
+function delay<T>(value: T, ms: number = DEFAULT_DELAY_MS): Promise<T> {
+  return new Promise((resolve) => setTimeout(() => resolve(value), ms));
 }
 
 export class ApiError extends Error {
@@ -166,100 +43,92 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, init);
-  if (!res.ok) {
-    let detail = res.statusText;
-    try {
-      const body = await res.json();
-      if (body && typeof body.detail === "string") detail = body.detail;
-      else if (body) detail = JSON.stringify(body);
-    } catch {
-      // ignore — keep statusText
-    }
-    throw new ApiError(res.status, detail);
-  }
-  if (res.status === 204) return undefined as T;
-  return (await res.json()) as T;
-}
-
-function jsonInit(method: string, body: unknown): RequestInit {
-  return {
-    method,
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  };
-}
-
 export const api = {
-  getCases: (status?: string) =>
-    request<Case[]>(`/cases${status ? `?status=${encodeURIComponent(status)}` : ""}`),
-
-  getCase: (id: string) => request<Case>(`/cases/${id}`),
-
-  createCase: (body: CreateCaseBody) => request<Case>("/cases", jsonInit("POST", body)),
-
-  getDocuments: (caseId: string) => request<Document[]>(`/cases/${caseId}/documents`),
-
-  uploadDocument: (caseId: string, file: File, docType: string) => {
-    const form = new FormData();
-    form.append("file", file);
-    form.append("doc_type", docType);
-    return request<UploadDocumentResponse>(`/cases/${caseId}/documents`, {
-      method: "POST",
-      body: form,
-    });
+  listCases(): Promise<CaseSummary[]> {
+    return delay(listCases());
   },
 
-  runAnalysis: (caseId: string) =>
-    request<AnalyzeResponse>(`/cases/${caseId}/analyze`, { method: "POST" }),
+  getCase(caseId: string): Promise<CaseDetail> {
+    const c = getCase(caseId);
+    if (!c) return Promise.reject(new ApiError(404, "Case not found"));
+    return delay(c);
+  },
 
-  getFindings: (caseId: string) => request<Finding[]>(`/cases/${caseId}/findings`),
+  getExtractionStatus(caseId: string): Promise<ExtractionStatus> {
+    const s = getExtractionStatus(caseId);
+    if (!s) return Promise.reject(new ApiError(404, "Case not found"));
+    // Shorter delay on polling so UI feels snappy.
+    return delay(s, 60);
+  },
 
-  reviewFinding: (caseId: string, findingId: string, body: ReviewBody) =>
-    request<ReviewFindingResponse>(
-      `/cases/${caseId}/findings/${findingId}/review`,
-      jsonInit("POST", body),
-    ),
+  getMatchup(caseId: string): Promise<Matchup | null> {
+    return delay(getMatchup(caseId));
+  },
 
-  generateMemo: (caseId: string) =>
-    request<GenerateMemoResponse>(`/cases/${caseId}/memo`, { method: "POST" }),
+  async uploadCaseDocument(file: File): Promise<CaseDetail> {
+    const fileType = inferFileType(file);
+    const created = createCaseFromUpload({
+      fileName: file.name,
+      fileSizeBytes: file.size,
+      fileType,
+      pageCount: fileType === "pdf" ? 3 : undefined,
+    });
+    return delay(created, 450);
+  },
 
-  getMemo: (caseId: string) => request<Memo>(`/cases/${caseId}/memo`),
+  createCase(caseNumber: string): Promise<{ caseId: string; duplicateOf?: string }> {
+    const result = createCaseFromNumber(caseNumber);
+    return delay(result);
+  },
 
-  approveMemo: (caseId: string, body: ApproveBody) =>
-    request<ApproveMemoResponse>(`/cases/${caseId}/memo/approve`, jsonInit("POST", body)),
+  confirmEntity(caseId: string, entityId: string): Promise<CaseDetail> {
+    const updated = confirmEntity(caseId, entityId);
+    if (!updated) return Promise.reject(new ApiError(404, "Case or entity not found"));
+    return delay(updated);
+  },
 
-  getAuditLog: (caseId: string) => request<AuditEntry[]>(`/cases/${caseId}/audit`),
+  confirmAllRemaining(caseId: string): Promise<CaseDetail> {
+    const updated = confirmAllRemaining(caseId);
+    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
+    return delay(updated);
+  },
+
+  applyCorrection(caseId: string, entityId: string, payload: CorrectionPayload): Promise<CaseDetail> {
+    const updated = applyCorrection(caseId, entityId, payload);
+    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
+    return delay(updated);
+  },
+
+  resolveAmbiguous(
+    caseId: string,
+    entityId: string,
+    pickedEntityId: string | null,
+  ): Promise<CaseDetail> {
+    const updated = resolveAmbiguous(caseId, entityId, pickedEntityId);
+    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
+    return delay(updated);
+  },
+
+  addEntity(caseId: string, name: string, role: EntityRole): Promise<CaseDetail> {
+    const updated = addEntity(caseId, name, role);
+    if (!updated) return Promise.reject(new ApiError(404, "Case not found"));
+    return delay(updated);
+  },
 };
 
-export function parseSourceExcerpts(finding: Finding): SourceExcerpt[] {
-  if (!finding.source_excerpts) return [];
-  try {
-    const parsed = JSON.parse(finding.source_excerpts);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+function inferFileType(file: File): "pdf" | "docx" | "image" {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".pdf")) return "pdf";
+  if (name.endsWith(".docx") || name.endsWith(".doc")) return "docx";
+  return "image";
 }
 
-export function parsePriorityFindings(memo: Memo): PriorityFinding[] {
-  if (!memo.priority_findings) return [];
-  try {
-    const parsed = JSON.parse(memo.priority_findings);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-}
-
-export function formatConfidence(value: number): number {
-  return Math.round(value * 100);
-}
-
-export function confidenceLevel(value: number): "high" | "medium" | "low" {
-  const pct = formatConfidence(value);
-  if (pct >= 80) return "high";
-  if (pct >= 60) return "medium";
-  return "low";
-}
+export const ACCEPTED_EXTS = [".pdf", ".docx", ".jpg", ".jpeg", ".png", ".heic"];
+export const ACCEPTED_MIME = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/jpeg",
+  "image/png",
+  "image/heic",
+];
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
