@@ -44,7 +44,7 @@ export function relativeTime(iso: string): string {
 }
 
 export function caseDisplayName(c: Pick<CaseSummary, "caseName" | "caseNumber">): string {
-  if (c.caseName) return c.caseName;
+  if (c.caseName) return titleCaseName(c.caseName);
   if (c.caseNumber) return c.caseNumber;
   return "Untitled case";
 }
