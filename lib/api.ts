@@ -136,6 +136,10 @@ export const api = {
       jsonInit("POST", { name, role }),
     );
   },
+
+  getDocumentUrl(caseId: string, documentId: string): Promise<{ url: string }> {
+    return request<{ url: string }>(`/cases/${caseId}/documents/${documentId}/url`);
+  },
 };
 
 // Re-exported so components can reuse the allowlists / limits. These mirror

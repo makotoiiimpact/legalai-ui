@@ -6,6 +6,7 @@ import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 import MatchupSection from "@/components/MatchupCard";
 import { ApiError, api } from "@/lib/api";
+import type { CaseDocument } from "@/lib/types";
 import {
   caseDisplayName,
   formatDate,
@@ -176,13 +177,7 @@ export default function CaseViewPage({
                     </p>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  disabled
-                  className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500"
-                >
-                  View
-                </button>
+                <ViewDocumentButton caseId={caseId} doc={d} />
               </li>
             ))}
           </ul>
@@ -235,6 +230,37 @@ function PersonRow({ entity, caseId }: { entity: EntityCandidate; caseId: string
         </Link>
       ) : null}
     </div>
+  );
+}
+
+// ---------- View document button ----------
+
+function ViewDocumentButton({ caseId, doc }: { caseId: string; doc: CaseDocument }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleClick() {
+    if (loading) return;
+    setLoading(true);
+    try {
+      const { url } = await api.getDocumentUrl(caseId, doc.id);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.detail : "Couldn't open document";
+      toast.error(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={loading}
+      className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-wait disabled:text-slate-400"
+    >
+      {loading ? "Opening…" : "View"}
+    </button>
   );
 }
 
