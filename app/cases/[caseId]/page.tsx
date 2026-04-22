@@ -88,7 +88,7 @@ export default function CaseViewPage({
           ← Back to Cases
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
-          {caseData.caseName ? `State v. ${caseData.caseName}` : caseDisplayName(caseData)}
+          {caseData.caseName ?? caseDisplayName(caseData)}
         </h1>
         <p className="mt-1 font-mono text-sm text-slate-500">
           {caseData.caseNumber}
