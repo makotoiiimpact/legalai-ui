@@ -346,19 +346,22 @@ function ReviewFooter({
   onConfirmAll: () => void;
   onSaveLater: () => void;
 }) {
+  const statusText =
+    pendingCount === 0
+      ? `${totalEntities} of ${totalEntities} entities confirmed`
+      : `${pendingCount} of ${totalEntities} entities need confirmation`;
+
   return (
     <div className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-6 py-3">
-        <p className="text-sm text-slate-600">
-          {pendingCount === 0
-            ? `${totalEntities} of ${totalEntities} entities confirmed`
-            : `${pendingCount} of ${totalEntities} entities need confirmation`}
-        </p>
-        <div className="flex items-center gap-3">
+      {/* Mobile (<sm): stack vertically — status on top, then primary
+          action first, secondary below. Desktop keeps the inline row. */}
+      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4 sm:px-6">
+        <p className="text-sm text-slate-600">{statusText}</p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:gap-3">
           <button
             type="button"
             onClick={onSaveLater}
-            className="text-sm text-slate-500 hover:text-slate-800"
+            className="text-sm text-slate-500 hover:text-slate-800 sm:w-auto"
           >
             Save &amp; Review Later
           </button>
@@ -366,6 +369,7 @@ function ReviewFooter({
             variant={canConfirmAll ? "primary" : "secondary"}
             disabled={!canConfirmAll || busy}
             onClick={onConfirmAll}
+            className="w-full sm:w-auto"
           >
             Confirm All Remaining
           </Button>

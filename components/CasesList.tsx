@@ -46,24 +46,67 @@ export default function CasesList({ cases }: Props) {
 
 function ListView({ cases }: { cases: CaseSummary[] }) {
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-            <th className="px-5 py-3 w-40">Status</th>
-            <th className="px-5 py-3">Case</th>
-            <th className="px-5 py-3 w-32">Entities</th>
-            <th className="px-5 py-3 w-40">Updated</th>
-            <th className="px-5 py-3 w-40 text-right"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {cases.map((c) => (
-            <ListRow key={c.id} c={c} />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <>
+      {/* Mobile (<sm): stacked cards. The desktop table clips the Updated
+          column and the ⚡ matchup badge off-screen on narrow viewports;
+          the cards keep every field visible at the cost of a taller row. */}
+      <ul className="space-y-2 sm:hidden">
+        {cases.map((c) => (
+          <MobileRow key={c.id} c={c} />
+        ))}
+      </ul>
+
+      {/* Desktop: existing 5-column table. */}
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm sm:block">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <th className="px-5 py-3 w-40">Status</th>
+              <th className="px-5 py-3">Case</th>
+              <th className="px-5 py-3 w-32">Entities</th>
+              <th className="px-5 py-3 w-40">Updated</th>
+              <th className="px-5 py-3 w-40 text-right"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {cases.map((c) => (
+              <ListRow key={c.id} c={c} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+function MobileRow({ c }: { c: CaseSummary }) {
+  const matchupReady = c.reviewStatus === "confirmed" && c.hasMatchupData;
+  return (
+    <li className="rounded-xl border border-slate-200 bg-white shadow-sm">
+      <Link href={statusPath(c)} className="block px-4 py-3 active:bg-slate-50">
+        <div className="flex items-center gap-2">
+          <StatusDot status={c.reviewStatus} />
+          <span className="text-xs font-medium uppercase tracking-wider text-slate-500">
+            {STATUS_LABEL[c.reviewStatus]}
+          </span>
+        </div>
+        <p className="mt-2 text-base font-semibold text-slate-900">{caseDisplayName(c)}</p>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <span className="font-mono text-xs text-slate-500">{c.caseNumber || "—"}</span>
+          <EntitiesProgress summary={c} />
+        </div>
+        {c.ambiguousCount ? (
+          <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
+            ⚠ {c.ambiguousCount} ambiguous
+          </p>
+        ) : null}
+        {matchupReady ? (
+          <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-xs font-medium text-indigo-700">
+            <span aria-hidden>⚡</span> matchup ready
+          </p>
+        ) : null}
+      </Link>
+    </li>
   );
 }
 
