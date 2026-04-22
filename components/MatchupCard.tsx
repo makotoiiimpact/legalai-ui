@@ -51,7 +51,7 @@ export default function MatchupSection({
       </div>
 
       <p className="mt-1 text-xs text-slate-500">
-        {caseContext.caseName ? `${caseContext.caseName}` : ""}
+        {caseContext.caseName ? titleCaseName(caseContext.caseName) : ""}
         {caseContext.courtDept ? ` · ${caseContext.courtDept}` : ""}
       </p>
 

@@ -78,8 +78,11 @@ export function titleCaseName(s: string | null | undefined): string {
     .split(/(\s+)/)
     .map((w) => {
       if (/^\s+$/.test(w)) return w;
-      // Preserve single-letter initials like "T." and acronyms like "DDA".
-      if (/^[A-Z]\.?$/.test(w) || (w.length <= 4 && /^[A-Z.]+$/.test(w))) return w;
+      // Preserve single-letter initials like "T." — any longer all-caps token
+      // is more likely a name than an acronym in this domain (e.g. "CHEN"),
+      // so we title-case it. Titles with true acronyms ("DDA", "ESQ") come in
+      // as mixed-case already and bypass this branch entirely.
+      if (/^[A-Z]\.?$/.test(w)) return w;
       return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
     })
     .join("");
