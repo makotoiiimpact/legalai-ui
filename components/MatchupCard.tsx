@@ -1,3 +1,4 @@
+import { titleCaseName } from "@/lib/case-helpers";
 import type {
   ConfidenceTier,
   JudgeMatchup,
@@ -73,12 +74,14 @@ export default function MatchupSection({
 // ---------- Judge ----------
 
 function JudgeMatchupCard({ data }: { data: JudgeMatchup }) {
+  const name = titleCaseName(data.judgeName);
+  const lastName = name.split(" ").slice(-1)[0];
   return (
-    <MatchupCardShell tier={data.tier} title="Judge" name={data.judgeName}>
+    <MatchupCardShell tier={data.tier} title="Judge" name={name}>
       <p className="text-xs text-slate-500">
         {data.priorCasesWithYou === 0
-          ? `First time facing ${data.judgeName.split(" ").slice(-1)[0]}`
-          : `You've appeared before ${data.judgeName.split(" ").slice(-1)[0]} ${data.priorCasesWithYou} times`}
+          ? `First time facing ${lastName}`
+          : `You've appeared before ${lastName} ${data.priorCasesWithYou} times`}
       </p>
 
       {data.motionStats.length > 0 ? (
@@ -110,7 +113,7 @@ function JudgeMatchupCard({ data }: { data: JudgeMatchup }) {
           <p className="font-medium text-slate-700">📊 More cases = sharper patterns.</p>
           <p className="mt-1 text-slate-500">
             You have {data.growthHint.totalAvailableCases.toLocaleString()}+ Clark County cases.
-            Upload {data.growthHint.casesToNextTier} more {data.judgeName.split(" ").slice(-1)[0]} cases to reach{" "}
+            Upload {data.growthHint.casesToNextTier} more {lastName} cases to reach{" "}
             {TIER_COPY[data.growthHint.nextTier].label.replace("Confidence: ", "")} confidence.
           </p>
         </div>
@@ -137,9 +140,10 @@ function StatRow({ stat }: { stat: MotionStat }) {
 // ---------- Prosecutor ----------
 
 function ProsecutorMatchupCard({ data }: { data: ProsecutorMatchup }) {
-  const firstName = data.prosecutorName.split(",")[0].trim();
+  const name = titleCaseName(data.prosecutorName);
+  const firstName = name.split(",")[0].trim();
   return (
-    <MatchupCardShell tier={data.tier} title="Prosecutor" name={data.prosecutorName}>
+    <MatchupCardShell tier={data.tier} title="Prosecutor" name={name}>
       <p className="text-xs text-slate-500">
         {data.priorCasesWithYou === 0
           ? `First time facing ${firstName}`

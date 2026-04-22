@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { titleCaseName } from "@/lib/case-helpers";
 import type { EntityCandidate, ExtractionConfidence } from "@/lib/types";
 
 const ROLE_LABEL: Record<EntityCandidate["role"], string> = {
@@ -39,6 +40,7 @@ export default function EntityCard({ entity, busy, onConfirm, onCorrect, onEdit,
   const isFirmMember = entity.matchStatus === "auto_confirmed" || entity.isFirmMember;
   const isAmbiguous = entity.matchStatus === "ambiguous" && !!entity.alternatives?.length;
   const confirmed = entity.reviewStatus === "confirmed" || entity.reviewStatus === "edited";
+  const displayName = titleCaseName(entity.extractedName);
 
   return (
     <div
@@ -53,7 +55,7 @@ export default function EntityCard({ entity, busy, onConfirm, onCorrect, onEdit,
             {ROLE_LABEL[entity.role]}
           </p>
           <p className="mt-0.5 text-base font-semibold text-slate-900">
-            {isAmbiguous ? `"${entity.extractedName}" extracted from document` : entity.extractedName}
+            {isAmbiguous ? `"${displayName}" extracted from document` : displayName}
           </p>
 
           <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -106,8 +108,9 @@ function CardActions({
   onCorrect: () => void;
   onEdit: (name: string) => void;
 }) {
+  const initialDraft = titleCaseName(entity.extractedName);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(entity.extractedName);
+  const [draft, setDraft] = useState(initialDraft);
 
   if (isFirmMember && entity.reviewStatus === "confirmed") {
     return (
@@ -144,7 +147,7 @@ function CardActions({
           className="text-xs text-slate-500 hover:text-slate-700"
           onClick={() => {
             setEditing(false);
-            setDraft(entity.extractedName);
+            setDraft(initialDraft);
           }}
         >
           Cancel

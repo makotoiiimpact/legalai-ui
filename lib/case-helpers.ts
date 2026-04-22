@@ -57,7 +57,30 @@ export function formatFileSize(bytes: number): string {
 
 export function formatDate(iso: string | null): string | null {
   if (!iso) return null;
-  const d = new Date(iso);
+  // Bare "YYYY-MM-DD" is parsed as UTC midnight by Date(); in PST that rolls
+  // back to the previous day. Parse date-only strings as local instead.
+  const dateOnly = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const d = dateOnly
+    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]))
+    : new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString("en-US", { year: "numeric", month: "2-digit", day: "2-digit" });
+}
+
+// Extraction preserves the PDF's casing, which is often ALL CAPS for names in
+// the caption. Title-case on render so "WILLIAM KEPHART" → "William Kephart"
+// without mutating what we stored. Strings that already contain any lowercase
+// letter are assumed to be properly cased and returned unchanged.
+export function titleCaseName(s: string | null | undefined): string {
+  if (!s) return "";
+  if (/[a-z]/.test(s)) return s;
+  return s
+    .split(/(\s+)/)
+    .map((w) => {
+      if (/^\s+$/.test(w)) return w;
+      // Preserve single-letter initials like "T." and acronyms like "DDA".
+      if (/^[A-Z]\.?$/.test(w) || (w.length <= 4 && /^[A-Z.]+$/.test(w))) return w;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join("");
 }

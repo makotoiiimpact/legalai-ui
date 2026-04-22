@@ -6,7 +6,13 @@ import { use, useEffect, useState } from "react";
 import { toast } from "sonner";
 import MatchupSection from "@/components/MatchupCard";
 import { ApiError, api } from "@/lib/api";
-import { caseDisplayName, formatDate, formatFileSize, relativeTime } from "@/lib/case-helpers";
+import {
+  caseDisplayName,
+  formatDate,
+  formatFileSize,
+  relativeTime,
+  titleCaseName,
+} from "@/lib/case-helpers";
 import type { CaseDetail, DataTier, EntityCandidate, Matchup } from "@/lib/types";
 
 const ROLE_LABEL: Record<EntityCandidate["role"], string> = {
@@ -88,11 +94,11 @@ export default function CaseViewPage({
           ← Back to Cases
         </Link>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-slate-900">
-          {caseData.caseName ?? caseDisplayName(caseData)}
+          {titleCaseName(caseData.caseName ?? caseDisplayName(caseData))}
         </h1>
         <p className="mt-1 font-mono text-sm text-slate-500">
           {caseData.caseNumber}
-          {caseData.court ? ` · ${caseData.court}` : ""}
+          {caseData.court ? ` · ${titleCaseName(caseData.court)}` : ""}
           {caseData.courtDept ? `, ${caseData.courtDept}` : ""}
         </p>
         {caseData.charges.length > 0 ? (
@@ -201,9 +207,11 @@ function groupPeople(entities: EntityCandidate[]): Partial<Record<EntityCandidat
 }
 
 function PersonRow({ entity, caseId }: { entity: EntityCandidate; caseId: string }) {
-  const detail = [];
-  if (entity.isFirmMember) detail.push("you");
-  else if (entity.matchedPriorCases && entity.matchedPriorCases > 0) {
+  // Firm members get the inline "(you)" badge below and no detail line — the
+  // badge is already the signal. For non-firm entities, surface prior-case
+  // count as the detail line when we have a match.
+  const detail: string[] = [];
+  if (!entity.isFirmMember && entity.matchedPriorCases && entity.matchedPriorCases > 0) {
     detail.push(`${entity.matchedPriorCases} case${entity.matchedPriorCases === 1 ? "" : "s"} in system`);
   }
 
@@ -211,7 +219,7 @@ function PersonRow({ entity, caseId }: { entity: EntityCandidate; caseId: string
     <div className="group flex items-start justify-between gap-3">
       <div>
         <p className="font-medium text-slate-900">
-          {entity.extractedName}
+          {titleCaseName(entity.extractedName)}
           {entity.isFirmMember ? <span className="ml-2 text-xs font-normal text-slate-500">(you)</span> : null}
         </p>
         {detail.length > 0 ? (
