@@ -19,6 +19,9 @@ const ROLE_LABEL: Record<EntityCandidate["role"], string> = {
   expert: "Expert",
 };
 
+const POLL_INTERVAL_MS = 900;
+const MAX_POLLS = 120;
+
 export default function ProcessingPage({
   params,
 }: {
@@ -27,10 +30,12 @@ export default function ProcessingPage({
   const { caseId } = use(params);
   const router = useRouter();
   const [status, setStatus] = useState<ExtractionStatus | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
+    let pollCount = 0;
 
     const tick = async () => {
       try {
@@ -40,7 +45,12 @@ export default function ProcessingPage({
         if (next.state === "complete" || next.state === "partial" || next.state === "zero_entities" || next.state === "one_entity" || next.state === "image_only" || next.state === "error") {
           return; // stop polling
         }
-        timer = setTimeout(tick, 900);
+        pollCount += 1;
+        if (pollCount >= MAX_POLLS) {
+          setTimedOut(true);
+          return;
+        }
+        timer = setTimeout(tick, POLL_INTERVAL_MS);
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof ApiError ? err.detail : "Failed to load extraction status";
@@ -66,6 +76,7 @@ export default function ProcessingPage({
 
   const isComplete = status.state === "complete";
   const isError = status.state === "error";
+  const isTimedOut = timedOut && !isComplete && !isError;
 
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
@@ -148,6 +159,18 @@ export default function ProcessingPage({
               </div>
             </div>
           ) : null}
+
+          {isTimedOut ? (
+            <div className="mt-8 space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p>
+                Extraction is taking longer than expected. You can close this page — we&apos;ll mark it ready
+                in your cases list when it finishes.
+              </p>
+              <Link href="/cases" className="inline-flex items-center text-xs font-medium text-amber-800 underline">
+                Back to cases →
+              </Link>
+            </div>
+          ) : null}
         </section>
 
         <aside>
@@ -159,7 +182,7 @@ export default function ProcessingPage({
             pageCount={status.documentPageCount}
             className="mt-3"
           />
-          {!isComplete && !isError ? (
+          {!isComplete && !isError && !isTimedOut ? (
             <p className="mt-4 text-xs text-slate-500">
               You can close this page. We&apos;ll mark it ready in your cases list.
             </p>
